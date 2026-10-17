@@ -453,10 +453,9 @@ static class Program
             embedded.DT = content.Top - window.Top;
             embedded.DR = window.Right - content.Right;
             embedded.DB = window.Bottom - content.Bottom;
-            if (Near(content, inner)) break;
+            if (Fits(content, inner)) break;
 
-            SetWindowPos(chrome, IntPtr.Zero, -embedded.DL, -embedded.DT,
-                inner.Width + embedded.DL + embedded.DR, inner.Height + embedded.DT + embedded.DB, SWP_NOZORDER | SWP_SHOWWINDOW);
+            PlaceChrome(embedded, inner.Width, inner.Height, SWP_NOZORDER | SWP_SHOWWINDOW);
             Thread.Sleep(200);
         }
 
@@ -470,7 +469,7 @@ static class Program
 
         var result = Ok();
         result["content"] = ToDict(content);
-        result["matched"] = Near(content, inner);
+        result["matched"] = Fits(content, inner);
         return result;
     }
 
@@ -510,11 +509,28 @@ static class Program
         Rectangle inner = e.Frame.Inner.RectangleToScreen(e.Frame.Inner.ClientRectangle);
         RECT target;
         target.Left = inner.Left; target.Top = inner.Top; target.Right = inner.Right; target.Bottom = inner.Bottom;
-        if (Near(view, target)) return;
+        if (Fits(view, target)) return;
 
-        SetWindowPos(e.Chrome, IntPtr.Zero, -e.DL, -e.DT,
-            inner.Width + e.DL + e.DR, inner.Height + e.DT + e.DB,
-            SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+        PlaceChrome(e, inner.Width, inner.Height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
+    }
+
+    // 모니터 배율 때문에 Chrome 이 크기를 1px 정도 반올림하면 웹 화면 가장자리에 Chrome 창 테두리가
+    // 한 줄 비쳐 보인다. 그래서 웹 화면을 액자 안쪽보다 사방 Overlap 만큼 크게 잡아 넘치는 부분이 잘리게 한다.
+    const int Overlap = 2;
+
+    static void PlaceChrome(Embedded e, int innerWidth, int innerHeight, uint flags)
+    {
+        SetWindowPos(e.Chrome, IntPtr.Zero, -e.DL - Overlap, -e.DT - Overlap,
+            innerWidth + 2 * Overlap + e.DL + e.DR, innerHeight + 2 * Overlap + e.DT + e.DB, flags);
+    }
+
+    // 웹 화면이 안쪽을 빈틈없이 덮고, 넘치는 정도도 Overlap 근처인지 본다.
+    static bool Fits(RECT view, RECT inner)
+    {
+        RECT target = inner;
+        target.Left -= Overlap; target.Top -= Overlap; target.Right += Overlap; target.Bottom += Overlap;
+        return view.Left <= inner.Left && view.Top <= inner.Top && view.Right >= inner.Right && view.Bottom >= inner.Bottom
+            && Near(view, target);
     }
 
     // 영상 창 마우스 처리
