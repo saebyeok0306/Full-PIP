@@ -16,7 +16,7 @@
       "service_worker": "worker.js"
    },
    "action": {
-      "default_title": "영역 전체화면 켜기/끄기 (Alt+P)",
+      "default_title": "영역 전체화면 켜기/끄기 (Alt+Shift+F)",
       "default_icon": {
          "16": "icons/16.png",
          "32": "icons/32.png"
@@ -24,7 +24,7 @@
    },
    "commands": {
       "toggle": {
-         "suggested_key": { "default": "Alt+P" },
+         "suggested_key": { "default": "Alt+Shift+F" },
          "description": "영역 전체화면 켜기/끄기"
       }
    }

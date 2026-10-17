@@ -9,7 +9,7 @@
 const HOST = "com.areafullscreen.host";
 const TOPMOST = false;  // true 면 영상 창이 항상 다른 창 위에 뜬다.
 const INITIAL_AREA = 0.25;  // 영상 창의 처음 크기: 모니터 면적 대비 비율 (1 이면 원래 Chrome 창 크기 그대로)
-const TITLE = "영역 전체화면 켜기/끄기 (Alt+P)";
+const TITLE = "영역 전체화면 켜기/끄기 (Alt+Shift+F)";
 
 const busy = new Set();
 
