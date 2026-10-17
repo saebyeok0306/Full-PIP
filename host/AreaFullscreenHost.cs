@@ -64,7 +64,7 @@ static class Program
     [DllImport("user32.dll")] static extern IntPtr SetWindowsHookEx(int id, HookProc proc, IntPtr module, uint threadId);
     [DllImport("user32.dll")] static extern bool UnhookWindowsHookEx(IntPtr hook);
     [DllImport("user32.dll")] static extern uint SendInput(uint count, INPUT[] inputs, int size);
-    [DllImport("user32.dll")] static extern void NotifyWinEvent(uint winEvent, IntPtr hwnd, int idObject, int idChild);
+    [DllImport("user32.dll")] static extern bool ReleaseCapture();
     [DllImport("user32.dll")] static extern IntPtr CallNextHookEx(IntPtr hook, int code, IntPtr wParam, IntPtr lParam);
     [DllImport("kernel32.dll")] static extern IntPtr GetModuleHandle(string name);
     [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
@@ -86,15 +86,16 @@ static class Program
     delegate IntPtr HookProc(int code, IntPtr wParam, IntPtr lParam);
 
     const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
-    const int SW_RESTORE = 9;
+    const int SW_HIDE = 0, SW_RESTORE = 9;
     const int WM_GETICON = 0x007F;
     const int WM_NCCALCSIZE = 0x0083, WM_NCHITTEST = 0x0084, WM_NCPAINT = 0x0085, WM_NCACTIVATE = 0x0086, WM_NCLBUTTONDBLCLK = 0x00A3;
     const int WM_NCUAHDRAWCAPTION = 0x00AE, WM_NCUAHDRAWFRAME = 0x00AF;
     const int WM_MOUSEMOVE = 0x0200, WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202, WM_RBUTTONDOWN = 0x0204, WM_MBUTTONDOWN = 0x0207;
     const int HTCAPTION = 2, HTTRANSPARENT = -1;
     const uint MOUSEEVENTF_LEFTDOWN = 0x0002, MOUSEEVENTF_LEFTUP = 0x0004;
-    const uint EVENT_SYSTEM_MOVESIZESTART = 0x000A, EVENT_SYSTEM_MOVESIZEEND = 0x000B;
-    const int OBJID_WINDOW = 0, CHILDID_SELF = 0;
+    const int WM_SYSCOMMAND = 0x0112, SC_DRAGMOVE = 0xF012;  // SC_MOVE | HTCAPTION: 마우스로 창 이동 시작
+    const int WM_MOUSEACTIVATE = 0x0021, MA_NOACTIVATE = 3;
+    const int WS_EX_TOOLWINDOW = 0x00000080, WS_EX_NOACTIVATE = 0x08000000;
     // 이 프로그램이 직접 만든 마우스 입력 표시. 훅에서 이 표시가 붙은 입력은 건드리지 않는다.
     static readonly IntPtr OwnInputTag = new IntPtr(0x41465346);
     const int WS_THICKFRAME = 0x00040000, WS_MINIMIZEBOX = 0x00020000, WS_MAXIMIZEBOX = 0x00010000, WS_SYSMENU = 0x00080000;
@@ -256,6 +257,8 @@ static class Program
         watch.Tick += (s, e) => CheckEmbeds();
         watch.Start();
 
+        overlay = new DragOverlay();
+        IntPtr overlayHandle = overlay.Handle;  // 숨긴 채 핸들만 만들어 둔다.
         mouseHook = SetWindowsHookEx(WH_MOUSE_LL, MouseHookProc, GetModuleHandle(null), 0);
         keyboardHook = SetWindowsHookEx(WH_KEYBOARD_LL, KeyboardHookProc, GetModuleHandle(null), 0);
 
@@ -481,14 +484,53 @@ static class Program
     //  - 동영상 위를 끌면 창을 옮긴다. (PIP 처럼)
     //    누르는 순간에는 클릭인지 드래그인지 알 수 없으므로 일단 Chrome 에 전달하지 않고,
     //    움직이지 않고 떼면 그때 클릭을 다시 만들어 Chrome 에 보낸다.
-    //  - 마우스 입력이 Chrome 창으로 가기 때문에 Windows 기본 창 이동은 쓸 수 없어 직접 옮기되,
-    //    창 이동 시작/끝 알림(WinEvent)을 보내 PowerToys FancyZones 가 영역을 보여 주고 맞춰 넣게 한다.
+    //  - 끌기 시작하면 Windows 기본 창 이동으로 넘긴다. 그래야 Windows 화면 가장자리 스냅·스냅 레이아웃과
+    //    PowerToys FancyZones 가 동작한다. 마우스는 Chrome 창 쪽에 묶여 있으므로, 커서 아래에 거의 투명한
+    //    작은 창(DragOverlay)을 띄우고 거기에 마우스 누름을 만들어 보내 이 프로그램이 마우스를 잡게 한 뒤
+    //    창 이동을 시작한다. 넘기기 전(또는 넘기지 못한 경우)에는 직접 창을 옮긴다.
     static IntPtr mouseHook;
     static readonly HookProc MouseHookProc = OnMouse;  // GC 되지 않도록 붙잡아 둔다.
     static Embedded dragEmbedded;
     static POINT dragStart;
     static Point dragFrameStart;
-    static bool dragging;
+    static bool dragging;       // 클릭이 아니라 끌기로 판정됨
+    static bool injectedDown;   // 넘기기용 마우스 누름을 만들어 보냄 (실제 버튼 떼기는 막지 말아야 한다)
+    static bool systemMoving;   // Windows 기본 창 이동 중
+    static DragOverlay overlay;
+
+    // 커서 아래에 잠깐 띄우는 거의 투명한 창. 마우스 누름을 받으면 액자 창의 Windows 기본 창 이동을 시작한다.
+    class DragOverlay : Form
+    {
+        public DragOverlay()
+        {
+            FormBorderStyle = FormBorderStyle.None;
+            ShowInTaskbar = false;
+            TopMost = true;
+            StartPosition = FormStartPosition.Manual;
+            AutoScaleMode = AutoScaleMode.None;
+            BackColor = Color.Black;
+            Opacity = 0.01;
+        }
+
+        protected override bool ShowWithoutActivation { get { return true; } }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+                return cp;
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == WM_MOUSEACTIVATE) { m.Result = new IntPtr(MA_NOACTIVATE); return; }
+            if (m.Msg == WM_LBUTTONDOWN) { HideOverlay(); BeginSystemMove(); return; }
+            base.WndProc(ref m);
+        }
+    }
 
     // 훅 안에서 예외가 나면 프로그램 전체가 죽으므로, 문제가 생기면 입력을 그대로 넘긴다.
     static IntPtr OnMouse(int code, IntPtr wParam, IntPtr lParam)
@@ -523,12 +565,12 @@ static class Program
                     dragEmbedded = embedded;
                     dragStart = info.Pt;
                     dragFrameStart = embedded.Frame.Location;
-                    dragging = false;
+                    dragging = injectedDown = systemMoving = false;
                     return new IntPtr(1);
                 }
             }
         }
-        else if (msg == WM_MOUSEMOVE && dragEmbedded != null)
+        else if (msg == WM_MOUSEMOVE && dragEmbedded != null && !systemMoving)
         {
             IntPtr frame = dragEmbedded.Frame.Handle;
             int dx = info.Pt.X - dragStart.X, dy = info.Pt.Y - dragStart.Y;
@@ -536,7 +578,8 @@ static class Program
             if (!dragging && (Math.Abs(dx) > threshold || Math.Abs(dy) > threshold))
             {
                 dragging = true;
-                NotifyWinEvent(EVENT_SYSTEM_MOVESIZESTART, frame, OBJID_WINDOW, CHILDID_SELF);
+                Embedded embedded = dragEmbedded;
+                ui.BeginInvoke(new Action(() => HandOffToSystemMove(embedded)));
             }
             if (dragging)
                 SetWindowPos(frame, IntPtr.Zero, dragFrameStart.X + dx, dragFrameStart.Y + dy, 0, 0,
@@ -544,13 +587,44 @@ static class Program
         }
         else if (msg == WM_LBUTTONUP && dragEmbedded != null)
         {
-            IntPtr frame = dragEmbedded.Frame.Handle;
+            bool wasDragging = dragging, passThrough = injectedDown;
             dragEmbedded = null;
-            if (dragging) NotifyWinEvent(EVENT_SYSTEM_MOVESIZEEND, frame, OBJID_WINDOW, CHILDID_SELF);
-            else ui.BeginInvoke(new Action(ReplayClick));
-            return new IntPtr(1);
+            if (injectedDown) ui.BeginInvoke(new Action(HideOverlay));
+            if (!wasDragging) { ui.BeginInvoke(new Action(ReplayClick)); return new IntPtr(1); }
+            // 만들어 보낸 누름이 있으면 실제 떼기를 그대로 보내야 버튼이 눌린 상태로 남지 않고, 창 이동도 끝난다.
+            if (!passThrough) return new IntPtr(1);
         }
         return CallNextHookEx(mouseHook, code, wParam, lParam);
+    }
+
+    // 커서 아래에 투명한 창을 띄우고 그 위에 마우스 누름을 만들어 보낸다. (이어서 DragOverlay 가 받는다)
+    static void HandOffToSystemMove(Embedded embedded)
+    {
+        if (dragEmbedded != embedded || embedded.Frame.IsDisposed) return;  // 그사이 버튼을 뗀 경우
+        Point cursor = Cursor.Position;
+        int size = Scale(embedded.Frame.Handle, 64);
+        SetWindowPos(overlay.Handle, HWND_TOPMOST, cursor.X - size / 2, cursor.Y - size / 2, size, size,
+            SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        injectedDown = true;
+        SendMouse(MOUSEEVENTF_LEFTDOWN);
+    }
+
+    // WinForms 를 거치지 않고 띄웠으므로 숨길 때도 직접 숨긴다.
+    static void HideOverlay()
+    {
+        ShowWindow(overlay.Handle, SW_HIDE);
+    }
+
+    static void BeginSystemMove()
+    {
+        Embedded embedded = dragEmbedded;
+        if (embedded == null || !dragging || embedded.Frame.IsDisposed) return;
+        systemMoving = true;
+        ReleaseCapture();
+        // 버튼을 뗄 때까지 여기서 돌아오지 않는다.
+        SendMessage(embedded.Frame.Handle, WM_SYSCOMMAND, new IntPtr(SC_DRAGMOVE), IntPtr.Zero);
+        systemMoving = false;
+        dragEmbedded = null;
     }
 
     // pt 가 어느 영상 창 위인지, 그리고 끌어서 옮길 수 있는 동영상 화면 위인지
@@ -581,11 +655,18 @@ static class Program
 
     static void ReplayClick()
     {
-        var inputs = new INPUT[2];
-        inputs[0].Mouse.Flags = MOUSEEVENTF_LEFTDOWN;
-        inputs[1].Mouse.Flags = MOUSEEVENTF_LEFTUP;
-        inputs[0].Mouse.Extra = inputs[1].Mouse.Extra = OwnInputTag;
-        SendInput(2, inputs, Marshal.SizeOf(typeof(INPUT)));
+        SendMouse(MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP);
+    }
+
+    static void SendMouse(params uint[] flags)
+    {
+        var inputs = new INPUT[flags.Length];
+        for (int i = 0; i < flags.Length; i++)
+        {
+            inputs[i].Mouse.Flags = flags[i];
+            inputs[i].Mouse.Extra = OwnInputTag;
+        }
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
     }
 
     // 영상 창이 앞에 있을 때 ESC 를 누르면 바로 닫는다.
