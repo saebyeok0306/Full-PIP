@@ -1,7 +1,7 @@
 {
    "manifest_version": 3,
-   "name": "Area Fullscreen",
-   "description": "브라우저 창이 놓인 영역만큼 동영상을 테두리 없는 전체화면으로 재생합니다.",
+   "name": "Full PIP",
+   "description": "동영상만 테두리 없는 창으로 띄워, PIP처럼 크기 제한 없이 원하는 영역에 맞춰 봅니다.",
    "version": "1.0.0",
    "icons": {
       "16": "icons/16.png",
@@ -16,7 +16,7 @@
       "service_worker": "worker.js"
    },
    "action": {
-      "default_title": "영역 전체화면 켜기/끄기 (Alt+Shift+F)",
+      "default_title": "Full PIP 켜기/끄기 (Alt+Shift+F)",
       "default_icon": {
          "16": "icons/16.png",
          "32": "icons/32.png"
@@ -25,7 +25,7 @@
    "commands": {
       "toggle": {
          "suggested_key": { "default": "Alt+Shift+F" },
-         "description": "영역 전체화면 켜기/끄기"
+         "description": "Full PIP 켜기/끄기"
       }
    }
 }

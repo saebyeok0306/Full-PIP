@@ -1,4 +1,4 @@
-﻿# Area Fullscreen 도우미 프로그램을 빌드하고 Chrome 에 등록한다. (관리자 권한 필요 없음)
+﻿# Full PIP 도우미 프로그램을 빌드하고 Chrome 에 등록한다. (관리자 권한 필요 없음)
 $ErrorActionPreference = "Stop"
 
 $hostName = "com.areafullscreen.host"
@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) { throw "빌드 실패" }
 
 $json = [ordered]@{
     name            = $hostName
-    description     = "Area Fullscreen helper"
+    description     = "Full PIP helper"
     path            = $exe
     type            = "stdio"
     allowed_origins = @("chrome-extension://$extensionId/")

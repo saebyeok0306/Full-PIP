@@ -1,4 +1,4 @@
-// Area Fullscreen 도우미 프로그램 (Chrome 네이티브 메시징 호스트).
+// Full PIP 도우미 프로그램 (Chrome 네이티브 메시징 호스트).
 //
 // Chrome 창은 탭바/주소창/테두리를 스스로 그리기 때문에 바깥에서 지울 수 없다.
 // 그래서 지정 영역 크기의 테두리 없는 창(액자)을 만들고, 그 안에 Chrome 팝업 창을 자식으로 넣은 뒤
@@ -339,7 +339,7 @@ static class Program
             target.Right = Convert.ToInt32(rect["right"]);
             target.Bottom = Convert.ToInt32(rect["bottom"]);
             bool topmost = msg.ContainsKey("topmost") && Convert.ToBoolean(msg["topmost"]);
-            string title = msg.ContainsKey("title") ? Convert.ToString(msg["title"]) : "Area Fullscreen";
+            string title = msg.ContainsKey("title") ? Convert.ToString(msg["title"]) : "Full PIP";
             if (msg.ContainsKey("area"))
             {
                 double ratio = msg.ContainsKey("ratio") ? Convert.ToDouble(msg["ratio"]) : 16.0 / 9;

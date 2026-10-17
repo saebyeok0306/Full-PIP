@@ -9,7 +9,7 @@
 const HOST = "com.areafullscreen.host";
 const TOPMOST = false;  // true 면 영상 창이 항상 다른 창 위에 뜬다.
 const INITIAL_AREA = 0.25;  // 영상 창의 처음 크기: 모니터 면적 대비 비율 (1 이면 원래 Chrome 창 크기 그대로)
-const TITLE = "영역 전체화면 켜기/끄기 (Alt+Shift+F)";
+const TITLE = "Full PIP 켜기/끄기 (Alt+Shift+F)";
 
 const busy = new Set();
 
@@ -39,7 +39,7 @@ async function toggle(tab, exitOnly = false) {
         if (await getState(tab.id)) await exit(tab.id);
         else if (!exitOnly) await enter(tab);
     } catch (e) {
-        console.error("[Area Fullscreen]", e);
+        console.error("[Full PIP]", e);
     } finally {
         busy.delete(tab.id);
     }
@@ -225,7 +225,7 @@ async function disconnectIfIdle() {
 }
 
 function showError(text) {
-    console.warn("[Area Fullscreen]", text);
+    console.warn("[Full PIP]", text);
     chrome.action.setBadgeText({text: "!"});
     chrome.action.setTitle({title: text});
 }
