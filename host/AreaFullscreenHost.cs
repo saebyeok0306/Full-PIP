@@ -115,6 +115,7 @@ static class Program
 
     // 화면 배율 100% 기준 크기. 실제 픽셀은 모니터 배율에 맞춰 늘린다.
     const int BorderDip = 6;          // 크기 조절용 테두리 두께
+    static readonly Color BorderLineColor = Color.FromArgb(225, 225, 225);  // 테두리 바깥쪽의 얇은 선 색
     const int ControlsDip = 72;       // 아래쪽 동영상 컨트롤(재생바) 영역 — 여기서는 드래그로 창을 옮기지 않는다
     const int DragThresholdDip = 5;   // 이만큼 움직여야 클릭이 아니라 드래그로 본다
 
@@ -145,6 +146,21 @@ static class Program
         public FrameForm()
         {
             Controls.Add(Inner);
+            SetStyle(ControlStyles.ResizeRedraw | ControlStyles.OptimizedDoubleBuffer, true);
+        }
+
+        // 가장자리에 얇은 밝은 선을 그려 모든 방향의 테두리가 똑같이 보이게 한다.
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            int t = Math.Max(1, Program.Scale(Handle, 1)), w = ClientSize.Width, h = ClientSize.Height;
+            using (var brush = new SolidBrush(BorderLineColor))
+            {
+                e.Graphics.FillRectangle(brush, 0, 0, w, t);
+                e.Graphics.FillRectangle(brush, 0, h - t, w, t);
+                e.Graphics.FillRectangle(brush, 0, 0, t, h);
+                e.Graphics.FillRectangle(brush, w - t, 0, t, h);
+            }
         }
 
         public int Border { get { return Program.Scale(Handle, BorderDip); } }
@@ -473,9 +489,31 @@ static class Program
     static void LayoutChrome(Embedded e)
     {
         e.Frame.LayoutInner();
-        Size size = e.Frame.Inner.ClientSize;
+        AlignChrome(e);
+    }
+
+    // Chrome 의 웹 화면이 액자 안쪽(Inner)과 정확히 겹치도록 맞춘다.
+    // 주소창 높이 등은 모니터 배율이 바뀌면(다른 모니터로 옮기면) 달라지므로 매번 새로 잰다.
+    // 어긋난 채 두면 위쪽에 주소창 일부가 하얀 띠처럼 보인다.
+    static void AlignChrome(Embedded e)
+    {
+        IntPtr content = FindContent(e.Chrome);
+        if (content == IntPtr.Zero) return;
+        RECT window, view;
+        GetWindowRect(e.Chrome, out window);
+        GetWindowRect(content, out view);
+        e.DL = view.Left - window.Left;
+        e.DT = view.Top - window.Top;
+        e.DR = window.Right - view.Right;
+        e.DB = window.Bottom - view.Bottom;
+
+        Rectangle inner = e.Frame.Inner.RectangleToScreen(e.Frame.Inner.ClientRectangle);
+        RECT target;
+        target.Left = inner.Left; target.Top = inner.Top; target.Right = inner.Right; target.Bottom = inner.Bottom;
+        if (Near(view, target)) return;
+
         SetWindowPos(e.Chrome, IntPtr.Zero, -e.DL, -e.DT,
-            size.Width + e.DL + e.DR, size.Height + e.DT + e.DB,
+            inner.Width + e.DL + e.DR, inner.Height + e.DT + e.DB,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS);
     }
 
@@ -724,11 +762,12 @@ static class Program
     }
 
     // Chrome 쪽에서 창이 닫히면(탭이 다른 창으로 옮겨지는 등) 빈 액자를 정리한다.
+    // 웹 화면 위치가 어긋났으면 다시 맞춘다. (다른 모니터로 옮겨 배율이 바뀐 경우 등)
     static void CheckEmbeds()
     {
         foreach (var embedded in new List<Embedded>(Embeds.Values))
         {
-            if (IsInFrame(embedded)) continue;
+            if (IsInFrame(embedded)) { LayoutChrome(embedded); continue; }
             Embeds.Remove(embedded.Key);
             embedded.Released = true;
             embedded.Frame.Close();
