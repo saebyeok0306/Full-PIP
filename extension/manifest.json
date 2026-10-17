@@ -1,0 +1,31 @@
+{
+   "manifest_version": 3,
+   "name": "Area Fullscreen",
+   "description": "브라우저 창이 놓인 영역만큼 동영상을 테두리 없는 전체화면으로 재생합니다.",
+   "version": "1.0.0",
+   "icons": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png",
+      "128": "icons/128.png"
+   },
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu8jQ0osYMjnrRX7IBm2aqL1vyCA9eM1eQQKyOPZV1/dzQGRkP67L+dN3MvRSKK/rskvyVetLDvU75WeBNd4IybfaMxv/jNRkz8dnN6xxNu3UGxvr3qPYzfUofA5hBLujZfBBkFieW5xr3n8S+OtoFT5CHnEQme/E92CyrRTVSYAiCSfcCdQljMK/L6qizIlvO3ONnCJgyFOPXNvBrDHFDP3ECsQx9ije5poRzwJxZB4Wt7k5n4VqEdQmUgrQLAfOHzMxFFwjZ8Vb+xuYOk8jjSh+qQfSh7n8MvcKOlMGGEePwNOXT0ZveaS8MokRVfByhtWe60BsiJ0qokINsni5swIDAQAB",
+   "permissions": [ "scripting", "storage", "nativeMessaging" ],
+   "host_permissions": [ "<all_urls>" ],
+   "background": {
+      "service_worker": "worker.js"
+   },
+   "action": {
+      "default_title": "영역 전체화면 켜기/끄기 (Alt+P)",
+      "default_icon": {
+         "16": "icons/16.png",
+         "32": "icons/32.png"
+      }
+   },
+   "commands": {
+      "toggle": {
+         "suggested_key": { "default": "Alt+P" },
+         "description": "영역 전체화면 켜기/끄기"
+      }
+   }
+}

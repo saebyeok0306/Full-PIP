@@ -1,0 +1,2 @@
+# host/install.ps1 이 만드는 빌드 결과물 (도우미 exe, 이 PC 경로가 들어간 호스트 매니페스트)
+host/bin/
